@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   build:
@@ -11,7 +11,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # Used to cache dependencies with a timeout
       - name: Get Date
         id: get-date
         run: |
@@ -30,20 +29,84 @@ jobs:
           path: .buildozer
           key: ${{ runner.os }}-${{ env.date }}-${{ hashFiles('buildozer.spec') }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: "3.x"
-
-      - name: Install Buildozer dependencies
+      - name: Set up Docker
         run: |
-          pip install --upgrade pip
-          pip install buildozer
+          sudo apt-get update
+          sudo apt-get install -y docker.io
 
-      - name: Build with Buildozer
-        run: buildozer android debug
-        env:
-          BUILDOZER_VERSION: master
+      - name: Run Buildozer in Docker
+        run: |
+          docker run --name buildozer_container --workdir /github/workspace --rm \
+            -e "INPUT_COMMAND=buildozer android debug" \
+            -e "INPUT_BUILDOZER_VERSION=master" \
+            -e "INPUT_REPOSITORY_ROOT=/github/workspace" \
+            -e "INPUT_WORKDIR=/github/workspace" \
+            -e "HOME=$HOME" \
+            -e "GITHUB_JOB=${{ github.job }}" \
+            -e "GITHUB_REF=${{ github.ref }}" \
+            -e "GITHUB_SHA=${{ github.sha }}" \
+            -e "GITHUB_REPOSITORY=${{ github.repository }}" \
+            -e "GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}" \
+            -e "GITHUB_REPOSITORY_OWNER_ID=${{ github.repository_owner_id }}" \
+            -e "GITHUB_RUN_ID=${{ github.run_id }}" \
+            -e "GITHUB_RUN_NUMBER=${{ github.run_number }}" \
+            -e "GITHUB_RETENTION_DAYS=${{ github.retention_days }}" \
+            -e "GITHUB_RUN_ATTEMPT=${{ github.run_attempt }}" \
+            -e "GITHUB_REPOSITORY_ID=${{ github.repository_id }}" \
+            -e "GITHUB_ACTOR_ID=${{ github.actor_id }}" \
+            -e "GITHUB_ACTOR=${{ github.actor }}" \
+            -e "GITHUB_TRIGGERING_ACTOR=${{ github.triggering_actor }}" \
+            -e "GITHUB_WORKFLOW=${{ github.workflow }}" \
+            -e "GITHUB_HEAD_REF=${{ github.head_ref }}" \
+            -e "GITHUB_BASE_REF=${{ github.base_ref }}" \
+            -e "GITHUB_EVENT_NAME=${{ github.event_name }}" \
+            -e "GITHUB_SERVER_URL=${{ github.server_url }}" \
+            -e "GITHUB_API_URL=${{ github.api_url }}" \
+            -e "GITHUB_GRAPHQL_URL=${{ github.graphql_url }}" \
+            -e "GITHUB_REF_NAME=${{ github.ref_name }}" \
+            -e "GITHUB_REF_PROTECTED=${{ github.ref_protected }}" \
+            -e "GITHUB_REF_TYPE=${{ github.ref_type }}" \
+            -e "GITHUB_WORKFLOW_REF=${{ github.workflow_ref }}" \
+            -e "GITHUB_WORKFLOW_SHA=${{ github.workflow_sha }}" \
+            -e "GITHUB_WORKSPACE=${{ github.workspace }}" \
+            -e "GITHUB_ACTION=${{ github.action }}" \
+            -e "GITHUB_EVENT_PATH=${{ github.event_path }}" \
+            -e "GITHUB_ACTION_REPOSITORY=${{ github.action_repository }}" \
+            -e "GITHUB_ACTION_REF=${{ github.action_ref }}" \
+            -e "GITHUB_PATH=${{ github.path }}" \
+            -e "GITHUB_ENV=${{ github.env }}" \
+            -e "GITHUB_STEP_SUMMARY=${{ github.step_summary }}" \
+            -e "GITHUB_STATE=${{ github.state }}" \
+            -e "GITHUB_OUTPUT=${{ github.output }}" \
+            -e "RUNNER_OS=${{ runner.os }}" \
+            -e "RUNNER_ARCH=${{ runner.arch }}" \
+            -e "RUNNER_NAME=${{ runner.name }}" \
+            -e "RUNNER_ENVIRONMENT=${{ runner.environment }}" \
+            -e "RUNNER_TOOL_CACHE=${{ runner.tool_cache }}" \
+            -e "RUNNER_TEMP=${{ runner.temp }}" \
+            -e "RUNNER_WORKSPACE=${{ runner.workspace }}" \
+            -e "ACTIONS_RUNTIME_URL=${{ secrets.ACTIONS_RUNTIME_URL }}" \
+            -e "ACTIONS_RUNTIME_TOKEN=${{ secrets.ACTIONS_RUNTIME_TOKEN }}" \
+            -e "ACTIONS_CACHE_URL=${{ secrets.ACTIONS_CACHE_URL }}" \
+            -e "ACTIONS_RESULTS_URL=${{ secrets.ACTIONS_RESULTS_URL }}" \
+            -e GITHUB_ACTIONS=true \
+            -e CI=true \
+            -v "/var/run/docker.sock":"/var/run/docker.sock" \
+            -v "$HOME/.buildozer":"/root/.buildozer" \
+            -v "$HOME/.buildozer_global":"/root/.buildozer_global" \
+            -v "${{ github.workspace }}":"/github/workspace" \
+            bc39e2:4320fb3bfd2b4bcc968a90ebb89fcdbe \
+            /bin/bash -c "\
+              apt-get update && \
+              apt-get install -y openjdk-8-jdk wget unzip && \
+              wget https://dl.google.com/android/repository/commandlinetools-linux-7583922_latest.zip && \
+              mkdir -p /usr/local/android-sdk/cmdline-tools && \
+              unzip commandlinetools-linux-7583922_latest.zip -d /usr/local/android-sdk/cmdline-tools && \
+              yes | /usr/local/android-sdk/cmdline-tools/cmdline-tools/bin/sdkmanager --sdk_root=/usr/local/android-sdk --licenses && \
+              yes | /usr/local/android-sdk/cmdline-tools/cmdline-tools/bin/sdkmanager --sdk_root=/usr/local/android-sdk 'platform-tools' 'platforms;android-29' 'build-tools;29.0.3' && \
+              export ANDROID_HOME=/usr/local/android-sdk && \
+              export PATH=$PATH:/usr/local/android-sdk/cmdline-tools/cmdline-tools/bin:/usr/local/android-sdk/platform-tools:/usr/local/android-sdk/build-tools/29.0.3 && \
+              buildozer android debug"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
